@@ -193,7 +193,7 @@ export class Zerg {
 	}
 
 	get print(): string {
-		return '<a href="#!/room/' + Game.shard.name + '/' + this.pos.roomName + '">[' + this.name + ']</a>';
+		return `[${this.name}]`;
 	}
 
 	// Wrapped creep methods ===========================================================================================
@@ -733,4 +733,3 @@ export class Zerg {
 	}
 
 }
-

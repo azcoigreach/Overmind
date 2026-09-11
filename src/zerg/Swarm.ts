@@ -152,7 +152,7 @@ export class Swarm implements ProtoSwarm {
 	}
 
 	get print(): string {
-		return '<a href="#!/room/' + Game.shard.name + '/' + this.anchor.roomName + '">[' + `Swarm ` + this.ref + ']</a>';
+		return `[Swarm ${this.ref}]`;
 	}
 
 	debug(...args: any[]) {

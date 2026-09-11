@@ -40,8 +40,6 @@ export class OvermindConsole {
 		global.removeFlagsByColor = this.removeFlagsByColor;
 		global.removeErrantFlags = this.removeErrantFlags;
 		global.deepCleanMemory = this.deepCleanMemory;
-		global.startRemoteDebugSession = this.startRemoteDebugSession;
-		global.endRemoteDebugSession = this.endRemoteDebugSession;
 		global.profileMemory = this.profileMemory;
 		global.cancelMarketOrders = this.cancelMarketOrders;
 	}
@@ -49,16 +47,15 @@ export class OvermindConsole {
 	// Help, information, and operational changes ======================================================================
 
 	static help() {
-		let msg = '\n<font color="#ff00ff">';
+		let msg = '\n';
 		for (const line of asciiLogoSmall) {
 			msg += line + '\n';
 		}
-		msg += '</font>';
 
 		const descr: { [functionName: string]: string } = {};
 		descr.help = 'show this message';
 		descr['info()'] = 'display version and operation information';
-		descr['notifications()'] = 'print a list of notifications with hyperlinks to the console';
+		descr['notifications()'] = 'print a list of active notifications';
 		descr['setMode(mode)'] = 'set the operational mode to "manual", "semiautomatic", or "automatic"';
 		descr['setSignature(newSignature)'] = 'set your controller signature; no argument sets to default';
 		descr['print(...args[])'] = 'log stringified objects to the console';
@@ -82,7 +79,6 @@ export class OvermindConsole {
 		descr['removeErrantFlags()'] = 'remove all flags which don\'t match a directive';
 		descr['deepCleanMemory()'] = 'deletes all non-critical portions of memory (be careful!)';
 		descr['profileMemory(depth=1)'] = 'scan through memory to get the size of various objects';
-		descr['startRemoteDebugSession()'] = 'enables the remote debugger so Muon can debug your code';
 		descr['cancelMarketOrders(filter?)'] = 'cancels all market orders matching filter (if provided)';
 		// Console list
 		const descrMsg = toColumns(descr, {justify: true, padChar: '.'});
@@ -149,12 +145,9 @@ export class OvermindConsole {
 		const sig = signature ? signature : DEFAULT_OVERMIND_SIGNATURE;
 		if (sig.length > 100) {
 			throw new Error(`Invalid signature: ${signature}; length is over 100 chars.`);
-		} else if (sig.toLowerCase().includes('overmind') || sig.includes(DEFAULT_OVERMIND_SIGNATURE)) {
+		} else {
 			Memory.settings.signature = sig;
 			return `Controller signature set to ${sig}`;
-		} else {
-			throw new Error(`Invalid signature: ${signature}; must contain the string "Overmind" or ` +
-							`${DEFAULT_OVERMIND_SIGNATURE} (accessible on global with __DEFAULT_OVERMIND_SIGNATURE__)`);
 		}
 	}
 
@@ -169,16 +162,6 @@ export class OvermindConsole {
 	static stopDebug(thing: { name: string, memory: any }): string {
 		delete thing.memory.debug;
 		return `Disabled debugging for ${thing.name}.`;
-	}
-
-	static startRemoteDebugSession(): string {
-		global.remoteDebugger.enable();
-		return `Started remote debug session.`;
-	}
-
-	static endRemoteDebugSession(): string {
-		global.remoteDebugger.disable();
-		return `Ended remote debug session.`;
 	}
 
 	static print(...args: any[]): string {

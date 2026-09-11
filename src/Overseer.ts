@@ -21,7 +21,7 @@ import {Overlord} from './overlords/Overlord';
 import {profile} from './profiler/decorator';
 import {CombatPlanner} from './strategy/CombatPlanner';
 import {Cartographer, ROOMTYPE_CONTROLLER, ROOMTYPE_SOURCEKEEPER} from './utilities/Cartographer';
-import {derefCoords, hasJustSpawned, minBy, onPublicServer} from './utilities/utils';
+import {derefCoords, hasJustSpawned, isRoomAvailable, minBy, onPublicServer} from './utilities/utils';
 import {MUON, MY_USERNAME, USE_TRY_CATCH} from './~settings';
 
 
@@ -250,7 +250,7 @@ export class Overseer implements IOverseer {
 			}
 			const neighboringRooms = _.values(Game.map.describeExits(roomName)) as string[];
 			const isReachableFromColony = _.any(neighboringRooms, r => colony.roomNames.includes(r));
-			return isReachableFromColony && Game.map.isRoomAvailable(roomName);
+			return isReachableFromColony && isRoomAvailable(roomName);
 		});
 	}
 
