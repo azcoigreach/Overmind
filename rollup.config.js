@@ -50,7 +50,8 @@ export default {
     treeshake: false,
 
     output: {
-        file: "dist/main.js",
+        // Keep the tracked Screeps entry point in sync with every build.
+        file: "main.js",
         format: "cjs",
         sourcemap: false,
         banner: '//\n' +

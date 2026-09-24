@@ -23678,16 +23678,19 @@ let MeleeDefenseOverlord = class MeleeDefenseOverlord extends CombatOverlord {
         });
     }
     handleDefender(zergling) {
-        if (zergling.room.hostiles.length > 0) {
-            zergling.autoCombat(zergling.room.name);
-        }
+        // Reinforcements can spawn in another colony; always travel to the defense flag.
+        zergling.autoCombat(this.pos.roomName);
     }
     computeNeededZerglingAmount(setup, boostMultiplier) {
         const healAmount = CombatIntel.maxHealingByCreeps(this.room.hostiles);
-        const zerglingDamage = ATTACK_POWER * boostMultiplier * setup.getBodyPotential(ATTACK, this.colony);
+        const body = setup.generateBody(this.spawnGroup.energyCapacityAvailable);
+        const attackParts = _.filter(body, part => part == ATTACK).length;
+        if (attackParts == 0)
+            return 0;
+        const zerglingDamage = ATTACK_POWER * boostMultiplier * attackParts;
         const towerDamage = this.room.hostiles[0] ? CombatIntel.towerDamageAtPos(this.room.hostiles[0].pos) || 0 : 0;
         const worstDamageMultiplier = _.min(_.map(this.room.hostiles, creep => CombatIntel.minimumDamageTakenMultiplier(creep)));
-        return Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (zerglingDamage + towerDamage + 1)));
+        return Math.min(MAX_SPAWN_REQUESTS, Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (zerglingDamage + towerDamage + 1))));
     }
     init() {
         this.reassignIdleCreeps(Roles.melee);
@@ -23733,11 +23736,14 @@ let RangedDefenseOverlord = class RangedDefenseOverlord extends CombatOverlord {
     }
     computeNeededHydraliskAmount(setup, boostMultiplier) {
         const healAmount = CombatIntel.maxHealingByCreeps(this.room.hostiles);
-        const hydraliskDamage = RANGED_ATTACK_POWER * boostMultiplier
-            * setup.getBodyPotential(RANGED_ATTACK, this.colony);
+        const body = setup.generateBody(this.spawnGroup.energyCapacityAvailable);
+        const attackParts = _.filter(body, part => part == RANGED_ATTACK).length;
+        if (attackParts == 0)
+            return 0;
+        const hydraliskDamage = RANGED_ATTACK_POWER * boostMultiplier * attackParts;
         const towerDamage = this.room.hostiles[0] ? CombatIntel.towerDamageAtPos(this.room.hostiles[0].pos) || 0 : 0;
         const worstDamageMultiplier = _.min(_.map(this.room.hostiles, creep => CombatIntel.minimumDamageTakenMultiplier(creep)));
-        return Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (hydraliskDamage + towerDamage + 1)));
+        return Math.min(MAX_SPAWN_REQUESTS, Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (hydraliskDamage + towerDamage + 1))));
     }
     init() {
         this.reassignIdleCreeps(Roles.ranged);

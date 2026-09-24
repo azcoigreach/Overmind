@@ -267,4 +267,73 @@ test('spawn groups skip unreachable colonies before tile search and body sizing'
     assert.strictEqual(group.colonyNames[0], 'W56N13');
 });
 
+const invasionImports = {
+    '../../creepSetups/CreepSetup': bodyModule,
+    '../../creepSetups/setups': setups,
+    '../../intel/CombatIntel': {CombatIntel: {
+        maxHealingByCreeps: hostiles => hostiles.length * 12,
+        towerDamageAtPos: () => 0,
+        minimumDamageTakenMultiplier: () => 1,
+    }},
+    '../../priorities/priorities_overlords': {},
+    '../../resources/map_resources': {},
+    '../CombatOverlord': {CombatOverlord: class {}},
+    '../Overlord': {MAX_SPAWN_REQUESTS: 100},
+};
+const invasionGlobals = Object.assign({ATTACK_POWER: 30, RANGED_ATTACK_POWER: 10}, bodyGlobals);
+const {MeleeDefenseOverlord} = load('src/overlords/defense/meleeDefense.ts', invasionGlobals, invasionImports);
+const {RangedDefenseOverlord} = load('src/overlords/defense/rangedDefense.ts', invasionGlobals, invasionImports);
+
+function invasionFixture(Type, capacity = 800, colonyCapacity = 0) {
+    const overlord = Object.create(Type.prototype);
+    Object.assign(overlord, {
+        pos: {roomName: 'W58N19'},
+        room: {name: 'W58N19', hostiles: [{pos: {}}, {pos: {}}, {pos: {}}]},
+        spawnGroup: {energyCapacityAvailable: capacity},
+        colony: {room: {energyCapacityAvailable: colonyCapacity}},
+    });
+    return overlord;
+}
+
+test('melee reinforcements leave a peaceful spawn room for their assigned defense room', () => {
+    const overlord = invasionFixture(MeleeDefenseOverlord);
+    const destinations = [];
+    const defender = {room: {name: 'W59N14', hostiles: []}, autoCombat: room => destinations.push(room)};
+    overlord.handleDefender(defender);
+    assert.deepStrictEqual(destinations, ['W58N19']);
+    defender.room = overlord.room;
+    overlord.handleDefender(defender);
+    assert.deepStrictEqual(destinations, ['W58N19', 'W58N19']);
+});
+
+test('melee reinforcements continue toward the flag without destination vision', () => {
+    const overlord = invasionFixture(MeleeDefenseOverlord);
+    overlord.room = undefined;
+    let destination;
+    overlord.handleDefender({room: {name: 'W59N14', hostiles: []}, autoCombat: room => { destination = room; }});
+    assert.strictEqual(destination, 'W58N19');
+});
+
+for (const [Type, method, setup, capacity, damage] of [
+    [MeleeDefenseOverlord, 'computeNeededZerglingAmount', setups.CombatSetups.zerglings.default, 800, 180],
+    [RangedDefenseOverlord, 'computeNeededHydraliskAmount', setups.CombatSetups.hydralisks.default, 900, 30],
+]) {
+    test(`${Type.name} sizes reinforcements using the spawning group, not the ruined colony`, () => {
+        const overlord = invasionFixture(Type, capacity);
+        assert.strictEqual(overlord[method](setup, 1), Math.ceil(0.5 + 54 / (damage + 1)));
+        overlord.colony.room.energyCapacityAvailable = 3000;
+        assert.strictEqual(overlord[method](setup, 1), Math.ceil(0.5 + 54 / (damage + 1)));
+        assert.strictEqual(overlord[method](setup, 4), Math.ceil(0.5 + 54 / (damage * 4 + 1)));
+    });
+    test(`${Type.name} requests no unaffordable bodies and bounds extreme demand`, () => {
+        const overlord = invasionFixture(Type, 0, 3000);
+        assert.strictEqual(overlord[method](setup, 1), 0);
+        overlord.spawnGroup.energyCapacityAvailable = 100;
+        assert.strictEqual(overlord[method](setup, 1), 0);
+        overlord.spawnGroup.energyCapacityAvailable = capacity;
+        overlord.room.hostiles = Array(10000).fill({pos: {}});
+        assert.strictEqual(overlord[method](setup, 1), 100);
+    });
+}
+
 console.log(`${passed} regression tests passed.`);
