@@ -5882,6 +5882,7 @@ function getTerrainCosts(creep) {
 var Pathing_1;
 const DEFAULT_MAXOPS = 20000; // Default timeout for pathfinding
 const CREEP_COST = 0xfe;
+const FAILED_PATH_RETRY = 25;
 const MatrixTypes = {
     direct: 'dir',
     default: 'def',
@@ -5893,6 +5894,15 @@ const MatrixTypes = {
  * Module for pathing-related operations.
  */
 let Pathing = Pathing_1 = class Pathing {
+    static isFailureCached(key) {
+        // Entries are inserted in expiration order; prune even if a failed destination is abandoned.
+        for (const [cachedKey, expiration] of this.failures) {
+            if (expiration > Game.time)
+                break;
+            this.failures.delete(cachedKey);
+        }
+        return this.failures.has(key);
+    }
     // Room avoidance methods ==========================================================================================
     /**
      * Check if the room should be avoiding when calculating routes
@@ -5934,37 +5944,25 @@ let Pathing = Pathing_1 = class Pathing {
         // check to see whether findRoute should be used
         const roomDistance = Game.map.getRoomLinearDistance(origin.roomName, destination.roomName);
         let allowedRooms = options.route;
-        if (!allowedRooms && (options.useFindRoute || (options.useFindRoute === undefined && roomDistance > 2))) {
+        if (!allowedRooms && (options.useFindRoute || (options.useFindRoute === undefined &&
+            (roomDistance > 2 || (options.ensurePath && roomDistance > 0))))) {
             allowedRooms = this.findRoute(origin.roomName, destination.roomName, options);
+            if (!allowedRooms) {
+                // An unrestricted tile search cannot repair a missing room route.
+                return { path: [], ops: 0, cost: 0, incomplete: true };
+            }
         }
         if (options.direct) {
             options.terrainCosts = { plainCost: 1, swampCost: 1 };
         }
         const callback = (roomName) => this.roomCallback(roomName, origin, destination, allowedRooms, options);
-        let ret = PathFinder.search(origin, { pos: destination, range: options.range }, {
+        const ret = PathFinder.search(origin, { pos: destination, range: options.range }, {
             maxOps: options.maxOps,
             maxRooms: options.maxRooms,
             plainCost: options.terrainCosts.plainCost,
             swampCost: options.terrainCosts.swampCost,
             roomCallback: callback,
         });
-        if (ret.incomplete && options.ensurePath) {
-            if (options.useFindRoute == undefined) {
-                // handle case where pathfinder failed at a short distance due to not using findRoute
-                // can happen for situations where the creep would have to take an uncommonly indirect path
-                // options.allowedRooms and options.routeCallback can also be used to handle this situation
-                if (roomDistance <= 2) {
-                    log.warning(`Movement: path failed without findroute. Origin: ${origin.print}, ` +
-                        `destination: ${destination.print}. Trying again with options.useFindRoute = true...`);
-                    options.useFindRoute = true;
-                    ret = this.findPath(origin, destination, options);
-                    log.warning(`Movement: second attempt was ${ret.incomplete ? 'not ' : ''}successful`);
-                    return ret;
-                }
-            }
-            else {
-            }
-        }
         return ret;
     }
     /**
@@ -6571,6 +6569,10 @@ let Pathing = Pathing_1 = class Pathing {
         const linearDistance = Game.map.getRoomLinearDistance(origin, destination);
         const restrictDistance = options.restrictDistance || linearDistance + 10;
         const allowedRooms = { [origin]: true, [destination]: true };
+        const failureKey = `route:${origin}:${destination}:${restrictDistance}:` +
+            `${!!options.allowHostile}:${!!options.preferHighway}`;
+        if (this.isFailureCached(failureKey))
+            return undefined;
         // Determine whether to use highway bias
         let highwayBias = 1;
         if (options.preferHighway) {
@@ -6604,7 +6606,9 @@ let Pathing = Pathing_1 = class Pathing {
             },
         });
         if (!_.isArray(ret)) {
-            log.warning(`Movement: couldn't findRoute from ${origin} to ${destination}!`);
+            this.failures.set(failureKey, Game.time + FAILED_PATH_RETRY);
+            log.warning(`Movement: couldn't findRoute from ${origin} to ${destination} (error ${ret}); ` +
+                `retrying in ${FAILED_PATH_RETRY} ticks.`);
         }
         else {
             for (const value of ret) {
@@ -6699,10 +6703,14 @@ let Pathing = Pathing_1 = class Pathing {
         if (!Memory.pathing.distances[name1]) {
             Memory.pathing.distances[name1] = {};
         }
-        if (!Memory.pathing.distances[name1][name2]) {
+        const failureKey = `distance:${name1}:${name2}`;
+        if (Memory.pathing.distances[name1][name2] == undefined && !this.isFailureCached(failureKey)) {
             const ret = this.findShortestPath(arg1, arg2);
             if (!ret.incomplete) {
                 Memory.pathing.distances[name1][name2] = ret.path.length;
+            }
+            else {
+                this.failures.set(failureKey, Game.time + FAILED_PATH_RETRY);
             }
         }
         return Memory.pathing.distances[name1][name2];
@@ -6869,6 +6877,7 @@ let Pathing = Pathing_1 = class Pathing {
         return new RoomPosition(-10, -10, 'cannotFindPathablePosition');
     }
 };
+Pathing.failures = new Map();
 Pathing = Pathing_1 = __decorate([
     profile
 ], Pathing);
@@ -22531,7 +22540,7 @@ let SpawnGroup = class SpawnGroup {
         if (this.colonyNames.length == 0) {
             log.warning(`No colonies meet the requirements for SwarmGroup: ${this.ref}`);
         }
-        this.energyCapacityAvailable = _.max(_.map(this.colonyNames, roomName => Game.rooms[roomName].energyCapacityAvailable));
+        this.energyCapacityAvailable = _.max([0, ..._.map(this.colonyNames, roomName => Game.rooms[roomName].energyCapacityAvailable)]);
         Overmind.spawnGroups[this.ref] = this;
     }
     /**
@@ -22551,6 +22560,8 @@ let SpawnGroup = class SpawnGroup {
             const spawn = colonyRoom.spawns[0];
             if (spawn) {
                 const route = Pathing.findRoute(colonyRoom.name, this.roomName);
+                if (!route)
+                    continue;
                 const path = Pathing.findPathToRoom(spawn.pos, this.roomName, { route: route });
                 if (route && !path.incomplete && path.path.length <= MAX_PATH_DISTANCE) {
                     colonies.push(colonyRoom.name);
@@ -23845,21 +23856,13 @@ let OutpostDefenseOverlord = class OutpostDefenseOverlord extends CombatOverlord
             }
         }
     }
-    computeNeededHydraliskAmount(setup, enemyRangedPotential) {
-        const hydraliskPotential = setup.getBodyPotential(RANGED_ATTACK, this.colony);
-        // TODO: body potential from spawnGroup energy?
-        // let worstDamageMultiplier = CombatIntel.minimumDamageMultiplierForGroup(this.room.hostiles);
-        return Math.ceil(1.5 * enemyRangedPotential / hydraliskPotential);
-    }
-    // TODO: division by 0 error!
-    computeNeededBroodlingAmount(setup, enemyAttackPotential) {
-        const broodlingPotential = setup.getBodyPotential(ATTACK, this.colony);
-        // let worstDamageMultiplier = CombatIntel.minimumDamageMultiplierForGroup(this.room.hostiles);
-        return Math.ceil(1.5 * enemyAttackPotential / broodlingPotential);
-    }
-    computeNeededHealerAmount(setup, enemyHealPotential) {
-        const healerPotential = setup.getBodyPotential(HEAL, this.colony);
-        return Math.ceil(1.5 * enemyHealPotential / healerPotential);
+    computeNeededAmount(setup, part, enemyPotential) {
+        // Size defenders against the same spawn group that will actually build them.
+        const body = setup.generateBody(this.spawnGroup.energyCapacityAvailable);
+        const potential = _.filter(body, bodyPart => bodyPart == part).length;
+        if (potential == 0 || !Number.isFinite(enemyPotential) || enemyPotential <= 0)
+            return 0;
+        return Math.min(MAX_SPAWN_REQUESTS, Math.ceil(1.5 * enemyPotential / potential));
     }
     getEnemyPotentials() {
         if (this.room) {
@@ -23871,18 +23874,20 @@ let OutpostDefenseOverlord = class OutpostDefenseOverlord extends CombatOverlord
     }
     init() {
         const maxCost = Math.max(patternCost(CombatSetups.hydralisks.default), patternCost(CombatSetups.broodlings.default));
-        const mode = this.colony.room.energyCapacityAvailable >= maxCost ? 'NORMAL' : 'EARLY';
+        const energyCapacity = this.spawnGroup.energyCapacityAvailable;
+        const mode = energyCapacity >= maxCost ? 'NORMAL' : 'EARLY';
         const { attack, rangedAttack, heal } = this.getEnemyPotentials();
         const hydraliskSetup = mode == 'NORMAL' ? CombatSetups.hydralisks.default : CombatSetups.hydralisks.early;
-        const hydraliskAmount = this.computeNeededHydraliskAmount(hydraliskSetup, rangedAttack);
+        const hydraliskAmount = this.computeNeededAmount(hydraliskSetup, RANGED_ATTACK, rangedAttack);
         this.wishlist(hydraliskAmount, hydraliskSetup, { priority: this.priority - .2, reassignIdle: true });
         const broodlingSetup = mode == 'NORMAL' ? CombatSetups.broodlings.default : CombatSetups.broodlings.early;
-        const broodlingAmount = this.computeNeededBroodlingAmount(broodlingSetup, attack);
+        const broodlingAmount = this.computeNeededAmount(broodlingSetup, ATTACK, attack);
         this.wishlist(broodlingAmount, broodlingSetup, { priority: this.priority - .1, reassignIdle: true });
         const enemyHealers = _.filter(this.room ? this.room.hostiles : [], creep => CombatIntel.isHealer(creep)).length;
         let healerAmount = (enemyHealers > 0 || mode == 'EARLY') ?
-            this.computeNeededHealerAmount(CombatSetups.healers.default, heal) : 0;
-        if (mode == 'EARLY' && attack + rangedAttack > 0) {
+            this.computeNeededAmount(CombatSetups.healers.default, HEAL, heal) : 0;
+        if (mode == 'EARLY' && attack + rangedAttack > 0 &&
+            energyCapacity >= patternCost(CombatSetups.healers.default)) {
             healerAmount = Math.max(healerAmount, 1);
         }
         this.wishlist(healerAmount, CombatSetups.healers.default, { priority: this.priority, reassignIdle: true });
