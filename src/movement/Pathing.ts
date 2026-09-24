@@ -11,6 +11,7 @@ import {MoveOptions, SwarmMoveOptions} from './Movement';
 
 const DEFAULT_MAXOPS = 20000;		// Default timeout for pathfinding
 const CREEP_COST = 0xfe;
+const FAILED_PATH_RETRY = 25;
 
 export interface TerrainCosts {
 	plainCost: number;
@@ -30,6 +31,17 @@ export const MatrixTypes = {
  */
 @profile
 export class Pathing {
+
+	private static failures = new Map<string, number>();
+
+	private static isFailureCached(key: string): boolean {
+		// Entries are inserted in expiration order; prune even if a failed destination is abandoned.
+		for (const [cachedKey, expiration] of this.failures) {
+			if (expiration > Game.time) break;
+			this.failures.delete(cachedKey);
+		}
+		return this.failures.has(key);
+	}
 
 	// Room avoidance methods ==========================================================================================
 
@@ -77,8 +89,13 @@ export class Pathing {
 		// check to see whether findRoute should be used
 		const roomDistance = Game.map.getRoomLinearDistance(origin.roomName, destination.roomName);
 		let allowedRooms = options.route;
-		if (!allowedRooms && (options.useFindRoute || (options.useFindRoute === undefined && roomDistance > 2))) {
+		if (!allowedRooms && (options.useFindRoute || (options.useFindRoute === undefined &&
+			(roomDistance > 2 || (options.ensurePath && roomDistance > 0))))) {
 			allowedRooms = this.findRoute(origin.roomName, destination.roomName, options);
+			if (!allowedRooms) {
+				// An unrestricted tile search cannot repair a missing room route.
+				return {path: [], ops: 0, cost: 0, incomplete: true};
+			}
 		}
 
 		if (options.direct) {
@@ -86,7 +103,7 @@ export class Pathing {
 		}
 
 		const callback = (roomName: string) => this.roomCallback(roomName, origin, destination, allowedRooms, options);
-		let ret = PathFinder.search(origin, {pos: destination, range: options.range!}, {
+		const ret = PathFinder.search(origin, {pos: destination, range: options.range!}, {
 			maxOps      : options.maxOps,
 			maxRooms    : options.maxRooms,
 			plainCost   : options.terrainCosts!.plainCost,
@@ -94,23 +111,6 @@ export class Pathing {
 			roomCallback: callback,
 		});
 
-		if (ret.incomplete && options.ensurePath) {
-			if (options.useFindRoute == undefined) {
-				// handle case where pathfinder failed at a short distance due to not using findRoute
-				// can happen for situations where the creep would have to take an uncommonly indirect path
-				// options.allowedRooms and options.routeCallback can also be used to handle this situation
-				if (roomDistance <= 2) {
-					log.warning(`Movement: path failed without findroute. Origin: ${origin.print}, ` +
-								`destination: ${destination.print}. Trying again with options.useFindRoute = true...`);
-					options.useFindRoute = true;
-					ret = this.findPath(origin, destination, options);
-					log.warning(`Movement: second attempt was ${ret.incomplete ? 'not ' : ''}successful`);
-					return ret;
-				}
-			} else {
-
-			}
-		}
 		return ret;
 	}
 
@@ -756,6 +756,9 @@ export class Pathing {
 		const linearDistance = Game.map.getRoomLinearDistance(origin, destination);
 		const restrictDistance = options.restrictDistance || linearDistance + 10;
 		const allowedRooms = {[origin]: true, [destination]: true};
+		const failureKey = `route:${origin}:${destination}:${restrictDistance}:` +
+			`${!!options.allowHostile}:${!!options.preferHighway}`;
+		if (this.isFailureCached(failureKey)) return undefined;
 
 		// Determine whether to use highway bias
 		let highwayBias = 1;
@@ -791,7 +794,9 @@ export class Pathing {
 		});
 
 		if (!_.isArray(ret)) {
-			log.warning(`Movement: couldn't findRoute from ${origin} to ${destination}!`);
+			this.failures.set(failureKey, Game.time + FAILED_PATH_RETRY);
+			log.warning(`Movement: couldn't findRoute from ${origin} to ${destination} (error ${ret}); ` +
+						`retrying in ${FAILED_PATH_RETRY} ticks.`);
 		} else {
 			for (const value of ret) {
 				allowedRooms[value.room] = true;
@@ -893,10 +898,13 @@ export class Pathing {
 		if (!Memory.pathing.distances[name1]) {
 			Memory.pathing.distances[name1] = {};
 		}
-		if (!Memory.pathing.distances[name1][name2]) {
+		const failureKey = `distance:${name1}:${name2}`;
+		if (Memory.pathing.distances[name1][name2] == undefined && !this.isFailureCached(failureKey)) {
 			const ret = this.findShortestPath(arg1, arg2);
 			if (!ret.incomplete) {
 				Memory.pathing.distances[name1][name2] = ret.path.length;
+			} else {
+				this.failures.set(failureKey, Game.time + FAILED_PATH_RETRY);
 			}
 		}
 		return Memory.pathing.distances[name1][name2];

@@ -3,8 +3,7 @@ import {minBy, mod} from '../utilities/utils';
 
 Object.defineProperty(RoomPosition.prototype, 'print', {
 	get() {
-		return '<a href="#!/room/' + Game.shard.name + '/' + this.roomName + '">[' + this.roomName + ', ' + this.x +
-			   ', ' + this.y + ']</a>';
+		return `[${this.roomName}, ${this.x}, ${this.y}]`;
 	},
 	configurable: true,
 });
@@ -279,4 +278,3 @@ RoomPosition.prototype.findClosestByRangeThenPath = function <T extends _HasRoom
 		return this.findClosestByPath(closestObjects); // don't clutter up pathing.distance cached values
 	}
 };
-

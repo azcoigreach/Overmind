@@ -93,7 +93,7 @@ function makeVSCLink(pos: SourcePos): string {
 }
 
 function tooltip(str: string, tooltip: string): string {
-	return `<abbr title='${tooltip}'>${str}</abbr>`;
+	return str;
 }
 
 function vscUrl(path: string, line: string): string {
@@ -101,7 +101,7 @@ function vscUrl(path: string, line: string): string {
 }
 
 function link(href: string, title: string): string {
-	return `<a href='${href}' target="_blank">${title}</a>`;
+	return title;
 }
 
 function time(): string {
@@ -266,7 +266,7 @@ export class Log {
 
 			if (lines.length > upStack) {
 				const originalLines = _.drop(lines, upStack).map(resolve);
-				const hoverText = _.map(originalLines, 'final').join('&#10;');
+				const hoverText = _.map(originalLines, 'final').join('\n');
 				return this.adjustFileLine(
 					originalLines[0].final,
 					tooltip(makeVSCLink(originalLines[0]), hoverText)
@@ -330,4 +330,3 @@ if (LOG_LOAD_SOURCE_MAP) {
 }
 
 export const log = new Log();
-

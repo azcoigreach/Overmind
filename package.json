@@ -21,11 +21,13 @@
     "push-main": "rollup -c --environment DEST:main",
     "push-pserver": "rollup -c --environment DEST:pserver",
     "push-screepsplus": "rollup -c --environment DEST:screepsplus",
-    "test": "npm run clean && npm run lint && npm run build"
+    "test": "npm run clean && npm run lint && npm run build && npm run test:regression",
+    "test:regression": "node tests/routing-and-defense.test.js"
   },
   "devDependencies": {
     "@types/lodash": "3.10.1",
     "@types/screeps": "2.5.4",
+    "lodash": "3.10.1",
     "rollup": "0.62.0",
     "rollup-plugin-commonjs": "8.4.1",
     "rollup-plugin-node-resolve": "3.3.0",

@@ -90,8 +90,8 @@ export class SpawnGroup {
 		if (this.colonyNames.length == 0) {
 			log.warning(`No colonies meet the requirements for SwarmGroup: ${this.ref}`);
 		}
-		this.energyCapacityAvailable = _.max(_.map(this.colonyNames,
-												   roomName => Game.rooms[roomName].energyCapacityAvailable));
+		this.energyCapacityAvailable = _.max([0, ..._.map(this.colonyNames,
+												   roomName => Game.rooms[roomName].energyCapacityAvailable)]);
 		Overmind.spawnGroups[this.ref] = this;
 	}
 
@@ -114,6 +114,7 @@ export class SpawnGroup {
 			const spawn = colonyRoom.spawns[0];
 			if (spawn) {
 				const route = Pathing.findRoute(colonyRoom.name, this.roomName);
+				if (!route) continue;
 				const path = Pathing.findPathToRoom(spawn.pos, this.roomName, {route: route});
 				if (route && !path.incomplete && path.path.length <= MAX_PATH_DISTANCE) {
 					colonies.push(colonyRoom.name);

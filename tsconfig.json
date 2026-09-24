@@ -3,6 +3,7 @@
     "allowJs": true,
     "module": "esnext",
     "lib": ["esnext"],
+    "types": ["lodash", "screeps"],
     "target": "es2017",
     "moduleResolution": "Node",
     "newLine": "CRLF",
