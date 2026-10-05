@@ -7,6 +7,7 @@ import {profile} from '../../profiler/decorator';
 import {boostResources} from '../../resources/map_resources';
 import {CombatZerg} from '../../zerg/CombatZerg';
 import {CombatOverlord} from '../CombatOverlord';
+import {MAX_SPAWN_REQUESTS} from '../Overlord';
 
 /**
  * Spawns ranged defenders to defend against incoming player invasions in an owned room
@@ -42,12 +43,15 @@ export class RangedDefenseOverlord extends CombatOverlord {
 
 	private computeNeededHydraliskAmount(setup: CreepSetup, boostMultiplier: number): number {
 		const healAmount = CombatIntel.maxHealingByCreeps(this.room.hostiles);
-		const hydraliskDamage = RANGED_ATTACK_POWER * boostMultiplier
-							  * setup.getBodyPotential(RANGED_ATTACK, this.colony);
+		const body = setup.generateBody(this.spawnGroup.energyCapacityAvailable);
+		const attackParts = _.filter(body, part => part == RANGED_ATTACK).length;
+		if (attackParts == 0) return 0;
+		const hydraliskDamage = RANGED_ATTACK_POWER * boostMultiplier * attackParts;
 		const towerDamage = this.room.hostiles[0] ? CombatIntel.towerDamageAtPos(this.room.hostiles[0].pos) || 0 : 0;
 		const worstDamageMultiplier = _.min(_.map(this.room.hostiles,
 												creep => CombatIntel.minimumDamageTakenMultiplier(creep)));
-		return Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (hydraliskDamage + towerDamage + 1)));
+		return Math.min(MAX_SPAWN_REQUESTS,
+			Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (hydraliskDamage + towerDamage + 1))));
 	}
 
 	init() {

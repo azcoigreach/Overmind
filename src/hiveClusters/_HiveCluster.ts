@@ -29,7 +29,7 @@ export abstract class HiveCluster {
 	}
 
 	get print(): string {
-		return '<a href="#!/room/' + Game.shard.name + '/' + this.pos.roomName + '">[' + this.ref + ']</a>';
+		return `[${this.ref}]`;
 	}
 
 	// Logic to refresh the state of the hive cluster between ticks
@@ -45,4 +45,3 @@ export abstract class HiveCluster {
 	abstract run(): void;
 
 }
-

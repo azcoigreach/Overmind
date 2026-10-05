@@ -199,7 +199,7 @@ export class Colony {
 	 * Pretty-print the colony name in the console
 	 */
 	get print(): string {
-		return '<a href="#!/room/' + Game.shard.name + '/' + this.room.name + '">[' + this.name + ']</a>';
+		return `[${this.name}]`;
 	}
 
 	/**

@@ -134,7 +134,7 @@ export abstract class Overlord {
 	}
 
 	get print(): string {
-		return '<a href="#!/room/' + Game.shard.name + '/' + this.pos.roomName + '">[' + this.ref + ']</a>';
+		return `[${this.ref}]`;
 	}
 
 	recalculateCreeps(): void {

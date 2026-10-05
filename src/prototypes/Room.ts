@@ -5,7 +5,7 @@ import {MY_USERNAME} from '../~settings';
 // Logging =============================================================================================================
 Object.defineProperty(Room.prototype, 'print', {
 	get() {
-		return '<a href="#!/room/' + Game.shard.name + '/' + this.name + '">' + this.name + '</a>';
+		return this.name;
 	},
 	configurable: true,
 });

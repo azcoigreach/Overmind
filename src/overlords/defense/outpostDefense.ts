@@ -6,6 +6,7 @@ import {OverlordPriority} from '../../priorities/priorities_overlords';
 import {profile} from '../../profiler/decorator';
 import {CombatZerg} from '../../zerg/CombatZerg';
 import {CombatOverlord} from '../CombatOverlord';
+import {MAX_SPAWN_REQUESTS} from '../Overlord';
 
 /**
  * General purpose skirmishing overlord for dealing with player combat in an outpost
@@ -49,23 +50,12 @@ export class OutpostDefenseOverlord extends CombatOverlord {
 		}
 	}
 
-	private computeNeededHydraliskAmount(setup: CreepSetup, enemyRangedPotential: number): number {
-		const hydraliskPotential = setup.getBodyPotential(RANGED_ATTACK, this.colony);
-		// TODO: body potential from spawnGroup energy?
-		// let worstDamageMultiplier = CombatIntel.minimumDamageMultiplierForGroup(this.room.hostiles);
-		return Math.ceil(1.5 * enemyRangedPotential / hydraliskPotential);
-	}
-
-	// TODO: division by 0 error!
-	private computeNeededBroodlingAmount(setup: CreepSetup, enemyAttackPotential: number): number {
-		const broodlingPotential = setup.getBodyPotential(ATTACK, this.colony);
-		// let worstDamageMultiplier = CombatIntel.minimumDamageMultiplierForGroup(this.room.hostiles);
-		return Math.ceil(1.5 * enemyAttackPotential / broodlingPotential);
-	}
-
-	private computeNeededHealerAmount(setup: CreepSetup, enemyHealPotential: number): number {
-		const healerPotential = setup.getBodyPotential(HEAL, this.colony);
-		return Math.ceil(1.5 * enemyHealPotential / healerPotential);
+	private computeNeededAmount(setup: CreepSetup, part: BodyPartConstant, enemyPotential: number): number {
+		// Size defenders against the same spawn group that will actually build them.
+		const body = setup.generateBody(this.spawnGroup.energyCapacityAvailable);
+		const potential = _.filter(body, bodyPart => bodyPart == part).length;
+		if (potential == 0 || !Number.isFinite(enemyPotential) || enemyPotential <= 0) return 0;
+		return Math.min(MAX_SPAWN_REQUESTS, Math.ceil(1.5 * enemyPotential / potential));
 	}
 
 	private getEnemyPotentials(): { attack: number, rangedAttack: number, heal: number } {
@@ -80,22 +70,24 @@ export class OutpostDefenseOverlord extends CombatOverlord {
 
 		const maxCost = Math.max(patternCost(CombatSetups.hydralisks.default),
 								 patternCost(CombatSetups.broodlings.default));
-		const mode = this.colony.room.energyCapacityAvailable >= maxCost ? 'NORMAL' : 'EARLY';
+		const energyCapacity = this.spawnGroup.energyCapacityAvailable;
+		const mode = energyCapacity >= maxCost ? 'NORMAL' : 'EARLY';
 
 		const {attack, rangedAttack, heal} = this.getEnemyPotentials();
 
 		const hydraliskSetup = mode == 'NORMAL' ? CombatSetups.hydralisks.default : CombatSetups.hydralisks.early;
-		const hydraliskAmount = this.computeNeededHydraliskAmount(hydraliskSetup, rangedAttack);
+		const hydraliskAmount = this.computeNeededAmount(hydraliskSetup, RANGED_ATTACK, rangedAttack);
 		this.wishlist(hydraliskAmount, hydraliskSetup, {priority: this.priority - .2, reassignIdle: true});
 
 		const broodlingSetup = mode == 'NORMAL' ? CombatSetups.broodlings.default : CombatSetups.broodlings.early;
-		const broodlingAmount = this.computeNeededBroodlingAmount(broodlingSetup, attack);
+		const broodlingAmount = this.computeNeededAmount(broodlingSetup, ATTACK, attack);
 		this.wishlist(broodlingAmount, broodlingSetup, {priority: this.priority - .1, reassignIdle: true});
 
 		const enemyHealers = _.filter(this.room ? this.room.hostiles : [], creep => CombatIntel.isHealer(creep)).length;
 		let healerAmount = (enemyHealers > 0 || mode == 'EARLY') ?
-						   this.computeNeededHealerAmount(CombatSetups.healers.default, heal) : 0;
-		if (mode == 'EARLY' && attack + rangedAttack > 0) {
+						   this.computeNeededAmount(CombatSetups.healers.default, HEAL, heal) : 0;
+		if (mode == 'EARLY' && attack + rangedAttack > 0 &&
+			energyCapacity >= patternCost(CombatSetups.healers.default)) {
 			healerAmount = Math.max(healerAmount, 1);
 		}
 		this.wishlist(healerAmount, CombatSetups.healers.default, {priority: this.priority, reassignIdle: true});

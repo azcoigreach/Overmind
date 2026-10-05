@@ -7,6 +7,7 @@ import {profile} from '../../profiler/decorator';
 import {boostResources} from '../../resources/map_resources';
 import {CombatZerg} from '../../zerg/CombatZerg';
 import {CombatOverlord} from '../CombatOverlord';
+import {MAX_SPAWN_REQUESTS} from '../Overlord';
 
 /**
  * Spawns melee defenders to defend against incoming player invasions in an owned room
@@ -31,18 +32,21 @@ export class MeleeDefenseOverlord extends CombatOverlord {
 	}
 
 	private handleDefender(zergling: CombatZerg): void {
-		if (zergling.room.hostiles.length > 0) {
-			zergling.autoCombat(zergling.room.name);
-		}
+		// Reinforcements can spawn in another colony; always travel to the defense flag.
+		zergling.autoCombat(this.pos.roomName);
 	}
 
 	private computeNeededZerglingAmount(setup: CreepSetup, boostMultiplier: number): number {
 		const healAmount = CombatIntel.maxHealingByCreeps(this.room.hostiles);
-		const zerglingDamage = ATTACK_POWER * boostMultiplier * setup.getBodyPotential(ATTACK, this.colony);
+		const body = setup.generateBody(this.spawnGroup.energyCapacityAvailable);
+		const attackParts = _.filter(body, part => part == ATTACK).length;
+		if (attackParts == 0) return 0;
+		const zerglingDamage = ATTACK_POWER * boostMultiplier * attackParts;
 		const towerDamage = this.room.hostiles[0] ? CombatIntel.towerDamageAtPos(this.room.hostiles[0].pos) || 0 : 0;
 		const worstDamageMultiplier = _.min(_.map(this.room.hostiles,
 												creep => CombatIntel.minimumDamageTakenMultiplier(creep)));
-		return Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (zerglingDamage + towerDamage + 1)));
+		return Math.min(MAX_SPAWN_REQUESTS,
+			Math.ceil(.5 + 1.5 * healAmount / (worstDamageMultiplier * (zerglingDamage + towerDamage + 1))));
 	}
 
 	init() {

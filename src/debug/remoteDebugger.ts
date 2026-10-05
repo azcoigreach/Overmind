@@ -30,7 +30,7 @@ const DEBUGGER = color('[DEBUGGER]', '#ff00ff');
 
 /**
  * Debugging tool which lets me remotely debug other Overmind players' code by communicating through public memory
- * segments. Can be toggled on and off with console commands startRemoteDebugSession() and endRemoteDebugSession().
+ * segments.
  */
 export class RemoteDebugger {
 

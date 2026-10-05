@@ -7,11 +7,15 @@ export function getAllColonyRooms(): Room[] {
 }
 
 export function printRoomName(roomName: string): string {
-	return '<a href="#!/room/' + Game.shard.name + '/' + roomName + '">' + roomName + '</a>';
+	return roomName;
 }
 
 export function color(str: string, color: string): string {
-	return `<font color='${color}'>${str}</font>`;
+	return str;
+}
+
+export function isRoomAvailable(roomName: string): boolean {
+	return (<any>Game.map).getRoomStatus(roomName).status != 'closed';
 }
 
 /**

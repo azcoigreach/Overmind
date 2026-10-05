@@ -2,7 +2,6 @@
 
 import resolve from "rollup-plugin-node-resolve";
 import commonjs from "rollup-plugin-commonjs";
-import progress from "rollup-plugin-progress";
 import typescript from "rollup-plugin-typescript2";
 import screeps from "rollup-plugin-screeps";
 
@@ -25,7 +24,6 @@ export default {
     input: "src/main.ts",
 
     plugins: [
-        progress({clearLine: true}),
         resolve(),
         commonjs({
                      namedExports: {
@@ -52,7 +50,8 @@ export default {
     treeshake: false,
 
     output: {
-        file: "dist/main.js",
+        // Keep the tracked Screeps entry point in sync with every build.
+        file: "main.js",
         format: "cjs",
         sourcemap: false,
         banner: '//\n' +
