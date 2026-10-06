@@ -9,7 +9,8 @@
 // _______________________ Screeps AI ________________________
 //
 //
-// Overmind repository: github.com/bencbartlett/overmind
+// Overmind repository: github.com/azcoigreach/Overmind
+// Forked from the original Overmind project by Ben Bartlett.
 //
 
 

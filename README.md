@@ -1,14 +1,16 @@
 <img src="/assets/img/OvermindLogo.png" width=825>
 
-[<img src="/assets/img/buttons/download.png" height=22>](https://github.com/bencbartlett/Overmind/releases)   [<img src="/assets/img/buttons/patchNotes.png" height=22>](https://github.com/bencbartlett/Overmind/blob/master/CHANGELOG.md)   [<img src="/assets/img/buttons/documentation.png" height=22>](https://bencbartlett.github.io/overmind-docs/)   [<img src="/assets/img/buttons/wikipages.png" height=22>](https://github.com/bencbartlett/Overmind/wiki)   [<img src="/assets/img/buttons/slack.png" height=22>](https://screeps.slack.com/messages/overmind)   [<img src="/assets/img/buttons/issue.png" height=22>](https://github.com/bencbartlett/Overmind/issues/new)   [<img src="/assets/img/buttons/featureRequest.png" height=22>](https://github.com/bencbartlett/Overmind/issues/new?template=feature_request.md)
+[<img src="/assets/img/buttons/download.png" height=22>](https://github.com/azcoigreach/Overmind/releases)   [<img src="/assets/img/buttons/patchNotes.png" height=22>](https://github.com/azcoigreach/Overmind/blob/release/0.6.0/CHANGELOG.md)   [<img src="/assets/img/buttons/documentation.png" height=22>](https://bencbartlett.github.io/overmind-docs/)   [<img src="/assets/img/buttons/wikipages.png" height=22>](https://github.com/bencbartlett/Overmind/wiki)   [<img src="/assets/img/buttons/slack.png" height=22>](https://screeps.slack.com/messages/overmind)   [<img src="/assets/img/buttons/issue.png" height=22>](https://github.com/azcoigreach/Overmind/issues/new)   [<img src="/assets/img/buttons/featureRequest.png" height=22>](https://github.com/azcoigreach/Overmind/issues/new?template=feature_request.md)
 
-### Current release: [Overmind v0.5.2 - Evolution](https://github.com/bencbartlett/Overmind/releases)   [![Build Status](https://travis-ci.org/bencbartlett/Overmind.svg?branch=master)](https://travis-ci.org/bencbartlett/Overmind)
+### Current release: [Overmind v0.6.0](https://github.com/azcoigreach/Overmind/releases)   [![Build Status](https://travis-ci.org/bencbartlett/Overmind.svg?branch=release/0.6.0)](https://travis-ci.org/bencbartlett/Overmind)
 
-- See the [changelog](https://github.com/bencbartlett/Overmind/blob/master/CHANGELOG.md) for patch notes
+This repository is a fork of the original Overmind project by Ben Bartlett. Development and release work happens against the local release branch and PRs are merged into the active release line before final tagging and merge-back.
+
+- See the [changelog](https://github.com/azcoigreach/Overmind/blob/release/0.6.0/CHANGELOG.md) for patch notes
 - Documentation is available at the [documentation site](https://bencbartlett.github.io/overmind-docs/) and the [wiki](https://github.com/bencbartlett/Overmind/wiki)
 - Join the discussion in the [#overmind](https://screeps.slack.com/messages/overmind) Slack channel!
 - Read [blog posts](https://bencbartlett.wordpress.com/category/screeps/) about development
-- Submit an issue [here](https://github.com/bencbartlett/Overmind/issues/new) or request a feature [here](https://github.com/bencbartlett/Overmind/issues/new?template=feature_request.md)
+- Submit an issue [here](https://github.com/azcoigreach/Overmind/issues/new) or request a feature [here](https://github.com/azcoigreach/Overmind/issues/new?template=feature_request.md)
 - Find me in game [here](https://screeps.com/a/#!/profile/Muon)
 
 ---
@@ -45,6 +47,19 @@ To install the full codebase, download or clone the repository. (Please note tha
 - Compile without deploying: `npm run compile`
 
 Overmind uses `rollup` to bundle the compiled TypeScript into a single `main.js` file. The codebase includes functionality to compute checksums for internal validation - if you have a different version of `rollup` installed globally, different checksums may be computed and some functionality will be disabled. Please ensure the local installation of `rollup` found in `node_modules` is used.
+
+### Branching and release workflow
+
+This project uses a release branch for active development. `master` is reserved for the last fully validated release state, while day-to-day work happens on the active release branch such as `release/0.6.0`.
+
+- Create the release branch from `master`: `git checkout master && git checkout -b release/0.6.0`
+- Open pull requests that target the active release branch rather than `master`
+- Merge feature branches and fixes into the release branch after review and validation
+- When the release is ready, tag the release on that branch: `git tag v0.6.0`
+- Push the release branch and tag: `git push origin release/0.6.0 && git push origin v0.6.0`
+- After the final release is validated, merge the tagged release back into `master`: `git checkout master && git merge --no-ff release/0.6.0`
+
+This keeps `master` aligned with the last released, tagged version while allowing the next milestone to be developed and reviewed on a dedicated release branch.
 
 ### Setting up the Grafana dashboard
 
