@@ -64,7 +64,8 @@ export default {
                 '// _______________________ Screeps AI ________________________\n' +
                 '//\n' +
                 '//\n' +
-                '// Overmind repository: github.com/bencbartlett/overmind\n' +
+                '// Overmind repository: github.com/azcoigreach/Overmind\n' +
+                '// Forked from the original Overmind project by Ben Bartlett.\n' +
                 '//\n'
     },
 

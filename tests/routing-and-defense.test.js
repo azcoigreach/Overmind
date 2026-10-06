@@ -218,6 +218,41 @@ test('zero or invalid enemy potential produces finite zero requests; large threa
     assert.strictEqual(defenderRequests(300, 300, {attack: 10000, rangedAttack: 0, heal: 0})[1].quantity, 100);
 });
 
+test('missing container positions are handled without dereferencing undefined', () => {
+    const {MiningOverlord} = load('src/overlords/mining/miner.ts', {
+        Game: {rooms: {}},
+        Navigation: {},
+        _ : _,
+    }, {
+        '../../caching/GlobalCache': {$: {refresh() {}}},
+        '../../console/log': {log: {warning() {}, info() {}, error() {}}},
+        '../../creepSetups/CreepSetup': {bodyCost: () => 0, CreepSetup: class {}},
+        '../../creepSetups/setups': {Roles: {}, Setups: {drones: {miners: {standard: {generateBody() { return []; }}, default: {generateBody() { return []; }}, sourceKeeper: {generateBody() { return []; }}}}}},
+        '../../directives/colony/outpost': {DirectiveOutpost: {settings: {canSpawnReserversAtRCL: 3}}},
+        '../../directives/resource/harvest': {DirectiveHarvest: class {}},
+        '../../movement/Pathing': {Pathing: {findShortestPath() { return {path: []}; }}},
+        '../../priorities/priorities_overlords': {OverlordPriority: {remoteRoom: {roomIncrement: 0}}},
+        '../../profiler/decorator': {profile: () => target => target},
+        '../../utilities/Cartographer': {Cartographer: {roomType: () => 'normal'}, ROOMTYPE_SOURCEKEEPER: 'SK'},
+        '../../utilities/utils': {maxBy: () => 0, minBy: () => 0},
+        '../../zerg/Zerg': {Zerg: class {}},
+        '../Overlord': {Overlord: class { constructor() { this.outpostIndex = 0; this.zerg = () => []; this.pos = {roomName: 'W1N1'}; this.colony = {}; } }}
+    });
+
+    const overlord = Object.create(MiningOverlord.prototype);
+    Object.assign(overlord, {
+        allowDropMining: false,
+        container: undefined,
+        constructionSite: undefined,
+        link: undefined,
+        print: '[W1N1,10,10]',
+        colony: {hatchery: undefined, upgradeSite: undefined},
+        calculateContainerPos: () => undefined,
+    });
+
+    assert.doesNotThrow(() => overlord.addRemoveContainer());
+});
+
 function spawnGroupFixture(rooms, reachable) {
     const Game = {time: 100, rooms: _.indexBy(rooms, 'name'), map: {getRoomLinearDistance: () => 2}};
     const Memory = {rooms: {}};

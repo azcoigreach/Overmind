@@ -1,16 +1,16 @@
 {
   "name": "Overmind",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Overmind Screeps AI",
   "author": "Ben Bartlett",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bencbartlett/Overmind.git"
+    "url": "git+https://github.com/azcoigreach/Overmind.git"
   },
-  "homepage": "https://github.com/bencbartlett/Overmind#readme",
+  "homepage": "https://github.com/azcoigreach/Overmind#readme",
   "bugs": {
-    "url": "https://github.com/bencbartlett/Overmind/issues"
+    "url": "https://github.com/azcoigreach/Overmind/issues"
   },
   "scripts": {
     "build": "tsc -p .",

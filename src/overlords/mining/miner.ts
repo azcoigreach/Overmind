@@ -127,7 +127,7 @@ export class MiningOverlord extends Overlord {
 	/**
 	 * Calculate where the container output will be built for this site
 	 */
-	private calculateContainerPos(): RoomPosition {
+	private calculateContainerPos(): RoomPosition | undefined {
 		// log.debug(`Computing container position for mining overlord at ${this.pos.print}...`);
 		let originPos: RoomPosition | undefined;
 		if (this.colony.storage) {
@@ -140,9 +140,14 @@ export class MiningOverlord extends Overlord {
 			const pos = _.find(path, pos => pos.getRangeTo(this) == 1);
 			if (pos) return pos;
 		}
+		const safeNeighbors = this.pos.availableNeighbors(true);
+		if (!safeNeighbors || safeNeighbors.length === 0) {
+			log.warning(`No valid adjacent tile for container placement at ${this.print}!`);
+			return undefined;
+		}
 		// Shouldn't ever get here
 		log.warning(`Last resort container position calculation for ${this.print}!`);
-		return _.first(this.pos.availableNeighbors(true));
+		return _.first(safeNeighbors);
 	}
 
 	/**
@@ -155,6 +160,10 @@ export class MiningOverlord extends Overlord {
 		// Create container if there is not already one being built and no link
 		if (!this.container && !this.constructionSite && !this.link) {
 			const containerPos = this.calculateContainerPos();
+			if (!containerPos) {
+				log.warning(`${this.print}: no valid container placement found; skipping container construction`);
+				return;
+			}
 			const container = containerPos.lookForStructure(STRUCTURE_CONTAINER) as StructureContainer | undefined;
 			if (container) {
 				log.warning(`${this.print}: this.container out of sync at ${containerPos.print}`);

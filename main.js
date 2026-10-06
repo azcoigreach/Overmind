@@ -8,7 +8,8 @@
 // _______________________ Screeps AI ________________________
 //
 //
-// Overmind repository: github.com/bencbartlett/overmind
+// Overmind repository: github.com/azcoigreach/Overmind
+// Forked from the original Overmind project by Ben Bartlett.
 //
 
 'use strict';
@@ -1478,7 +1479,7 @@ var _0x7048=['UEhOSE06','bG9n','PGZvbnQgY29sb3I9J3llbGxvdyc+','QUxFUlQgIA==','ID
 global.Assimilator = new _Assimilator();
 
 "use strict";
-global.__VERSION__ = '0.5.2';
+global.__VERSION__ = '0.6.0';
 global.deref = function (ref) {
     return Game.getObjectById(ref) || Game.flags[ref] || Game.creeps[ref] || Game.spawns[ref] || null;
 };
@@ -9404,9 +9405,14 @@ let MiningOverlord = MiningOverlord_1 = class MiningOverlord extends Overlord {
             if (pos)
                 return pos;
         }
+        const safeNeighbors = this.pos.availableNeighbors(true);
+        if (!safeNeighbors || safeNeighbors.length === 0) {
+            log.warning(`No valid adjacent tile for container placement at ${this.print}!`);
+            return undefined;
+        }
         // Shouldn't ever get here
         log.warning(`Last resort container position calculation for ${this.print}!`);
-        return _.first(this.pos.availableNeighbors(true));
+        return _.first(safeNeighbors);
     }
     /**
      * Add or remove containers as needed to keep exactly one of contaner | link
@@ -9418,6 +9424,10 @@ let MiningOverlord = MiningOverlord_1 = class MiningOverlord extends Overlord {
         // Create container if there is not already one being built and no link
         if (!this.container && !this.constructionSite && !this.link) {
             const containerPos = this.calculateContainerPos();
+            if (!containerPos) {
+                log.warning(`${this.print}: no valid container placement found; skipping container construction`);
+                return;
+            }
             const container = containerPos.lookForStructure(STRUCTURE_CONTAINER);
             if (container) {
                 log.warning(`${this.print}: this.container out of sync at ${containerPos.print}`);
@@ -26895,7 +26905,8 @@ class ActionParser {
 // _______________________ Screeps AI ________________________
 //
 //
-// Overmind repository: github.com/bencbartlett/overmind
+// Overmind repository: github.com/azcoigreach/Overmind
+// Forked from the original Overmind project by Ben Bartlett.
 //
 // @formatter:off
 /* tslint:disable:ordered-imports */
