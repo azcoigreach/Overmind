@@ -167,9 +167,11 @@ const {OutpostDefenseOverlord} = load('src/overlords/defense/outpostDefense.ts',
     '../../creepSetups/CreepSetup': bodyModule,
     '../../creepSetups/setups': setups,
     '../../intel/CombatIntel': {CombatIntel: {isHealer: () => false}},
+    '../../movement/Movement': {Movement: {}},
     '../../priorities/priorities_overlords': {},
     '../CombatOverlord': {CombatOverlord: class {}},
-    '../Overlord': {MAX_SPAWN_REQUESTS: 100},
+    '../Overlord': {MAX_SPAWN_REQUESTS: 100, getOverlord() {}, setOverlord() {}},
+    '../../utilities/utils': {minBy() {}},
 });
 
 function defenderRequests(capacity, colonyCapacity = 300, enemy = {attack: 10, rangedAttack: 3, heal: 0}) {
@@ -218,6 +220,83 @@ test('zero or invalid enemy potential produces finite zero requests; large threa
     assert.strictEqual(defenderRequests(300, 300, {attack: 10000, rangedAttack: 0, heal: 0})[1].quantity, 100);
 });
 
+test('non-combat player hostiles in a defended outpost still get a defender', () => {
+    const overlord = Object.create(OutpostDefenseOverlord.prototype);
+    Object.assign(overlord, {spawnGroup: {energyCapacityAvailable: 1800}, priority: 1,
+        room: {hostiles: [{owner: {username: 'Mr.Jakob64'}}]}});
+    overlord.getEnemyPotentials = () => ({attack: 0, rangedAttack: 0, heal: 0});
+    const requests = [];
+    let adopted = 0;
+    overlord.adoptIdleFighters = () => adopted++;
+    overlord.wishlist = (quantity, setup) => requests.push({quantity, setup});
+    overlord.init();
+    assert.strictEqual(adopted, 1);
+    assert.strictEqual(requests[0].setup, setups.CombatSetups.hydralisks.default);
+    assert.strictEqual(requests[0].quantity, 1);
+});
+
+function defenseRoutingFixture() {
+    const reassigned = [];
+    const Game = {time: 1, map: {getRoomLinearDistance: (a, b) => Math.abs(Number(a.slice(4)) - Number(b.slice(4)))}};
+    const Overmind = {overlords: {}, colonyMap: {W57N12: 'W56N12', W57N13: 'W56N12', W57N15: 'W56N12'}};
+    const {OutpostDefenseOverlord: ODO} = load('src/overlords/defense/outpostDefense.ts',
+        Object.assign({Game, Overmind}, bodyGlobals), {
+        '../../creepSetups/CreepSetup': bodyModule,
+        '../../creepSetups/setups': setups,
+        '../../intel/CombatIntel': {CombatIntel: {}},
+        '../../movement/Movement': {Movement: {}},
+        '../../priorities/priorities_overlords': {},
+        '../CombatOverlord': {CombatOverlord: class {}},
+        '../Overlord': {MAX_SPAWN_REQUESTS: 100, getOverlord() {}, setOverlord: (creep, o) => reassigned.push(o)},
+        '../../utilities/utils': {minBy: (objects, f) => _.min(objects, f) === Infinity ? undefined : _.min(objects, f)},
+    });
+    const hostile = (roomName, x = 25) => ({owner: {username: 'MrJakob64'}, pos: {roomName, rangeToEdge: x}});
+    const defense = (roomName, hostiles) => {
+        const overlord = Object.create(ODO.prototype);
+        Object.assign(overlord, {pos: {roomName}, room: {name: roomName, hostiles}, healers: []});
+        overlord.engaged = [];
+        overlord.engage = (zerg, room, targets) => overlord.engaged.push({room, targets});
+        Overmind.overlords[roomName] = overlord;
+        return overlord;
+    };
+    const zerg = (roomName, hostiles = []) => ({pos: {roomName}, room: {name: roomName, hostiles}});
+    return {defense, hostile, zerg, reassigned, Overmind};
+}
+
+test('defenders intercept intruders in our territory instead of walking past them', () => {
+    const f = defenseRoutingFixture();
+    const far = f.defense('W57N15', [f.hostile('W57N15')]);
+    const intruder = f.hostile('W57N13');
+    far.handleCombat(f.zerg('W57N13', [intruder]));
+    assert.deepStrictEqual(far.engaged, [{room: 'W57N13', targets: [intruder]}]);
+    assert.strictEqual(f.reassigned.length, 0);
+});
+
+test('defenders ignore hostiles outside our territory and on exit tiles', () => {
+    const f = defenseRoutingFixture();
+    const far = f.defense('W57N15', [f.hostile('W57N15')]);
+    far.handleCombat(f.zerg('W57N99', [f.hostile('W57N99')]));
+    far.handleCombat(f.zerg('W57N13', [f.hostile('W57N13', 0)]));
+    assert(far.engaged.every(call => call.room == 'W57N15'));
+});
+
+test('defenders switch to the closest flag with active enemies', () => {
+    const f = defenseRoutingFixture();
+    const far = f.defense('W57N15', [f.hostile('W57N15')]);
+    const near = f.defense('W57N12', [f.hostile('W57N12')]);
+    far.handleCombat(f.zerg('W57N11'));
+    assert.deepStrictEqual(f.reassigned, [near]);
+    assert.strictEqual(near.engaged[0].room, 'W57N12');
+});
+
+test('defenders leave a cleared flag for the nearest active one', () => {
+    const f = defenseRoutingFixture();
+    const cleared = f.defense('W57N13', []);
+    const active = f.defense('W57N15', [f.hostile('W57N15')]);
+    cleared.handleCombat(f.zerg('W57N13'));
+    assert.deepStrictEqual(f.reassigned, [active]);
+});
+
 test('missing container positions are handled without dereferencing undefined', () => {
     const {MiningOverlord} = load('src/overlords/mining/miner.ts', {
         Game: {rooms: {}},
@@ -225,9 +304,10 @@ test('missing container positions are handled without dereferencing undefined', 
         _ : _,
     }, {
         '../../caching/GlobalCache': {$: {refresh() {}}},
+        '../../Colony': {ColonyStage: {}},
         '../../console/log': {log: {warning() {}, info() {}, error() {}}},
         '../../creepSetups/CreepSetup': {bodyCost: () => 0, CreepSetup: class {}},
-        '../../creepSetups/setups': {Roles: {}, Setups: {drones: {miners: {standard: {generateBody() { return []; }}, default: {generateBody() { return []; }}, sourceKeeper: {generateBody() { return []; }}}}}},
+        '../../creepSetups/setups': {Roles: {}, Setups: {drones: {miners: {standard: {generateBody() { return []; }}, default: {generateBody() { return []; }}, double: {generateBody() { return []; }}, sourceKeeper: {generateBody() { return []; }}}}}},
         '../../directives/colony/outpost': {DirectiveOutpost: {settings: {canSpawnReserversAtRCL: 3}}},
         '../../directives/resource/harvest': {DirectiveHarvest: class {}},
         '../../movement/Pathing': {Pathing: {findShortestPath() { return {path: []}; }}},
