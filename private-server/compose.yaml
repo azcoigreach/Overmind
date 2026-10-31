@@ -1,0 +1,60 @@
+name: overmind-private
+
+services:
+  screeps:
+    build: .
+    image: overmind-private-launcher:local
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      STEAM_KEY: ${STEAM_KEY:?Set STEAM_KEY in private-server/.env}
+      MONGO_HOST: mongo
+      REDIS_HOST: redis
+    ports:
+      - "127.0.0.1:${SCREEPS_PORT:-21025}:21025"
+    volumes:
+      - screeps-data:/screeps
+      - ./config.yml:/screeps/config.yml:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:21025/api/version"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10m
+      retries: 5
+
+  mongo:
+    image: mongo:8.3.11
+    environment:
+      # Avoid the TCMalloc rseq incompatibility on this Ubuntu 7.0 kernel.
+      # Remove after upgrading to a release with SERVER-131779 fixed.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({ping: 1}).ok ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  screeps-data:
+  mongo-data:
+  redis-data:

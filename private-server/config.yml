@@ -1,0 +1,19 @@
+# Launcher source: azcoigreach/screeps-launcher, pinned in Dockerfile.
+version: "4.3.0"
+nodeVersion: "Jod"
+processors: 2
+runnerThreads: 2
+pinnedPackages:
+  ssri: "8.0.1"
+  cacache: "15.3.0"
+  passport-steam: "1.0.17"
+  minipass-fetch: "2.1.2"
+  express-rate-limit: "6.7.0"
+  psl: "1.10.0"
+mods:
+  - screepsmod-mongo
+  - screepsmod-auth
+  - screepsmod-admin-utils
+serverConfig:
+  welcomeText: "<h1>Overmind private development server</h1>"
+  tickRate: 1000
