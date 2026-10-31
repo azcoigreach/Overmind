@@ -23835,10 +23835,12 @@ DirectiveInvasionDefense = __decorate([
     profile
 ], DirectiveInvasionDefense);
 
+var OutpostDefenseOverlord_1;
+const FIGHTER_ROLES = [Roles.guardMelee, Roles.ranged];
 /**
  * General purpose skirmishing overlord for dealing with player combat in an outpost
  */
-let OutpostDefenseOverlord = class OutpostDefenseOverlord extends CombatOverlord {
+let OutpostDefenseOverlord = OutpostDefenseOverlord_1 = class OutpostDefenseOverlord extends CombatOverlord {
     constructor(directive, priority = OverlordPriority.outpostDefense.outpostDefense) {
         super(directive, 'outpostDefense', priority, 1);
         this.spawnGroup.settings.flexibleEnergy = true;
@@ -23846,13 +23848,110 @@ let OutpostDefenseOverlord = class OutpostDefenseOverlord extends CombatOverlord
         this.hydralisks = this.combatZerg(Roles.ranged);
         this.healers = this.combatZerg(Roles.healer);
     }
+    get targets() {
+        return this.room ? _.filter(this.room.hostiles, hostile => hostile.owner.username != 'Source Keeper') : [];
+    }
+    static activeDefenses() {
+        if (!this._active || this._active.tick != Game.time) {
+            const overlords = _.filter(_.values(Overmind.overlords), (overlord) => overlord instanceof OutpostDefenseOverlord_1 && overlord.targets.length > 0);
+            this._active = { tick: Game.time, overlords };
+        }
+        return this._active.overlords;
+    }
+    roomDistance(creep) {
+        return Game.map.getRoomLinearDistance(creep.pos.roomName, this.pos.roomName);
+    }
+    static closestActiveDefense(creep) {
+        return minBy(this.activeDefenses(), overlord => overlord.roomDistance(creep));
+    }
+    /**
+     * Idle fighters (e.g. orphaned when their guard directive expired) join whichever active defense is closest
+     */
+    adoptIdleFighters() {
+        const idle = _.filter(Game.creeps, creep => _.contains(FIGHTER_ROLES, creep.memory.role) && !getOverlord(creep));
+        for (const creep of idle) {
+            if (OutpostDefenseOverlord_1.closestActiveDefense(creep) === this) {
+                setOverlord(creep, this);
+            }
+        }
+    }
+    /**
+     * Hostiles in the creep's current room if that room is part of our territory, so intruders are intercepted en route
+     */
+    localTargets(zerg) {
+        if (zerg.room.name == this.pos.roomName) {
+            return this.targets;
+        }
+        if (!Overmind.colonyMap[zerg.room.name]) {
+            return [];
+        }
+        return _.filter(zerg.room.hostiles, hostile => hostile.owner.username != 'Source Keeper'
+            && hostile.pos.rangeToEdge > 0);
+    }
+    canRecover(zerg) {
+        return zerg.getActiveBodyparts(HEAL) > 0 || _.any(this.healers, healer => healer.getActiveBodyparts(HEAL) > 0);
+    }
     handleCombat(zerg) {
-        if (this.room && this.room.hostiles.length == 0) {
-            zerg.doMedicActions(this.room.name);
+        const localTargets = this.localTargets(zerg);
+        if (localTargets.length > 0) {
+            this.engage(zerg, zerg.room.name, localTargets);
+            return;
+        }
+        const closest = OutpostDefenseOverlord_1.closestActiveDefense(zerg);
+        const roomIsClear = !!this.room && this.targets.length == 0;
+        if (closest && closest !== this && (roomIsClear || closest.roomDistance(zerg) < this.roomDistance(zerg))) {
+            setOverlord(zerg, closest);
+            closest.handleCombat(zerg);
+            return;
+        }
+        if (roomIsClear) {
+            zerg.doMedicActions(this.pos.roomName);
         }
         else {
-            zerg.autoSkirmish(this.pos.roomName);
+            this.engage(zerg, this.pos.roomName, this.targets);
         }
+    }
+    /**
+     * Attack every hostile in the room instead of only those the skirmish analysis deems favorable
+     */
+    engage(zerg, roomName, targets) {
+        if (zerg.getActiveBodyparts(ATTACK) > 0) {
+            zerg.autoMelee();
+        }
+        if (zerg.getActiveBodyparts(RANGED_ATTACK) > 0) {
+            zerg.autoRanged();
+        }
+        if (zerg.canExecute('heal')) {
+            zerg.autoHeal(zerg.canExecute('rangedHeal'));
+        }
+        // Without a source of healing, retreating just leaves the room undefended forever
+        if (zerg.needsToRecover(0.35, 0.8) && this.canRecover(zerg)) {
+            zerg.recover();
+            return;
+        }
+        if (!zerg.safelyInRoom(roomName)) {
+            zerg.goToRoom(roomName, { ensurePath: true });
+            return;
+        }
+        const target = zerg.pos.findClosestByRange(targets);
+        if (!target) {
+            zerg.park();
+            return;
+        }
+        const isMelee = zerg.getActiveBodyparts(ATTACK) > 0;
+        const avoid = [];
+        let range = 1;
+        if (!isMelee) {
+            for (const hostile of targets) {
+                if (hostile.getActiveBodyparts(ATTACK) > 0) {
+                    avoid.push({ pos: hostile.pos, range: 2 });
+                }
+            }
+            if (target.getActiveBodyparts(ATTACK) > 0) {
+                range = 3;
+            }
+        }
+        Movement.combatMove(zerg, [{ pos: target.pos, range: range }], avoid);
     }
     handleHealer(healer) {
         if (CombatIntel.isHealer(healer) && healer.getActiveBodyparts(HEAL) == 0) {
@@ -23893,12 +23992,19 @@ let OutpostDefenseOverlord = class OutpostDefenseOverlord extends CombatOverlord
         const energyCapacity = this.spawnGroup.energyCapacityAvailable;
         const mode = energyCapacity >= maxCost ? 'NORMAL' : 'EARLY';
         const { attack, rangedAttack, heal } = this.getEnemyPotentials();
+        if (this.room && this.targets.length > 0) {
+            this.adoptIdleFighters();
+        }
         const hydraliskSetup = mode == 'NORMAL' ? CombatSetups.hydralisks.default : CombatSetups.hydralisks.early;
-        const hydraliskAmount = this.computeNeededAmount(hydraliskSetup, RANGED_ATTACK, rangedAttack);
-        this.wishlist(hydraliskAmount, hydraliskSetup, { priority: this.priority - .2, reassignIdle: true });
+        let hydraliskAmount = this.computeNeededAmount(hydraliskSetup, RANGED_ATTACK, rangedAttack);
+        // Non-combat intruders (e.g. remote miners) still need someone to chase them off
+        if (this.room && this.targets.length > 0) {
+            hydraliskAmount = Math.max(hydraliskAmount, 1);
+        }
+        this.wishlist(hydraliskAmount, hydraliskSetup, { priority: this.priority - .2 });
         const broodlingSetup = mode == 'NORMAL' ? CombatSetups.broodlings.default : CombatSetups.broodlings.early;
         const broodlingAmount = this.computeNeededAmount(broodlingSetup, ATTACK, attack);
-        this.wishlist(broodlingAmount, broodlingSetup, { priority: this.priority - .1, reassignIdle: true });
+        this.wishlist(broodlingAmount, broodlingSetup, { priority: this.priority - .1 });
         const enemyHealers = _.filter(this.room ? this.room.hostiles : [], creep => CombatIntel.isHealer(creep)).length;
         let healerAmount = (enemyHealers > 0 || mode == 'EARLY') ?
             this.computeNeededAmount(CombatSetups.healers.default, HEAL, heal) : 0;
@@ -23909,12 +24015,13 @@ let OutpostDefenseOverlord = class OutpostDefenseOverlord extends CombatOverlord
         this.wishlist(healerAmount, CombatSetups.healers.default, { priority: this.priority, reassignIdle: true });
     }
     run() {
-        this.autoRun(this.broodlings, broodling => this.handleCombat(broodling));
-        this.autoRun(this.hydralisks, mutalisk => this.handleCombat(mutalisk));
-        this.autoRun(this.healers, healer => this.handleHealer(healer));
+        // Copies, since handleCombat can reassign creeps and mutate these arrays mid-iteration
+        this.autoRun([...this.broodlings], broodling => this.handleCombat(broodling));
+        this.autoRun([...this.hydralisks], hydralisk => this.handleCombat(hydralisk));
+        this.autoRun([...this.healers], healer => this.handleHealer(healer));
     }
 };
-OutpostDefenseOverlord = __decorate([
+OutpostDefenseOverlord = OutpostDefenseOverlord_1 = __decorate([
     profile
 ], OutpostDefenseOverlord);
 
@@ -25812,7 +25919,7 @@ let Overseer = Overseer_1 = class Overseer {
             // Handle player defense
             if (room.dangerousPlayerHostiles.length > 0) {
                 DirectiveOutpostDefense.createIfNotPresent(Pathing.findPathablePosition(room.name), 'room');
-                return;
+                continue;
             }
             // Handle NPC invasion directives
             if (Cartographer.roomType(room.name) != ROOMTYPE_SOURCEKEEPER) { // SK rooms can fend for themselves

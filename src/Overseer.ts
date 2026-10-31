@@ -189,7 +189,7 @@ export class Overseer implements IOverseer {
 			// Handle player defense
 			if (room.dangerousPlayerHostiles.length > 0) {
 				DirectiveOutpostDefense.createIfNotPresent(Pathing.findPathablePosition(room.name), 'room');
-				return;
+				continue;
 			}
 			// Handle NPC invasion directives
 			if (Cartographer.roomType(room.name) != ROOMTYPE_SOURCEKEEPER) { // SK rooms can fend for themselves
